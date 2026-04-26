@@ -149,6 +149,16 @@ pub fn verify_hook_at(hook_path: &Path) -> Result<IntegrityStatus> {
     }
 }
 
+fn trusted_hashes_match(actual: &str, trusted_hashes: &[String]) -> bool {
+    trusted_hashes
+        .iter()
+        .any(|trusted| trusted.eq_ignore_ascii_case(actual))
+}
+
+fn hash_is_trusted(actual: &str) -> bool {
+    trusted_hashes_match(actual, &crate::core::config::trusted_hook_hashes())
+}
+
 /// Read the stored hash from the hash file.
 ///
 /// Expects exact `sha256sum -c` format: `<64 hex>  <filename>\n`
@@ -208,6 +218,13 @@ pub fn run_verify(verbose: u8) -> Result<()> {
             println!("      {}", hook_path.display());
         }
         IntegrityStatus::Tampered { expected, actual } => {
+            if hash_is_trusted(&actual) {
+                println!("PASS  hook integrity verified via trusted override");
+                println!("      sha256:{}", actual);
+                println!("      {}", hook_path.display());
+                println!("      source: hooks.trusted_hook_hashes");
+                return Ok(());
+            }
             eprintln!("FAIL  hook integrity check FAILED");
             eprintln!();
             eprintln!("  Expected: {}", expected);
@@ -257,6 +274,9 @@ pub fn runtime_check() -> Result<()> {
             // Silently skip to avoid noise for users who haven't re-run init
         }
         IntegrityStatus::Tampered { expected, actual } => {
+            if hash_is_trusted(&actual) {
+                return Ok(());
+            }
             eprintln!("rtk: hook integrity check FAILED");
             eprintln!(
                 "  Expected hash: {}...",
@@ -538,5 +558,25 @@ mod tests {
         assert_eq!(parts.len(), 2);
         assert_eq!(parts[0].len(), 64);
         assert_eq!(parts[1], "rtk-rewrite.sh");
+    }
+
+    #[test]
+    fn test_trusted_hashes_match_case_insensitively() {
+        let trusted =
+            vec!["ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789".to_string()];
+        assert!(trusted_hashes_match(
+            "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+            &trusted
+        ));
+    }
+
+    #[test]
+    fn test_trusted_hashes_match_rejects_unknown_hash() {
+        let trusted =
+            vec!["abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".to_string()];
+        assert!(!trusted_hashes_match(
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            &trusted
+        ));
     }
 }

@@ -83,6 +83,7 @@ enabled = true
 
 [hooks]
 exclude_commands = ["curl", "playwright"]  # Never auto-rewrite these
+trusted_hook_hashes = ["<sha256-of-intentional-custom-rtk-rewrite.sh>"]  # Trust an explicit custom global hook
 
 [limits]
 grep_max_results = 200

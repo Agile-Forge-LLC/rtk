@@ -29,6 +29,10 @@ pub struct HooksConfig {
     /// Survives `rtk init -g` re-runs since config.toml is user-owned.
     #[serde(default)]
     pub exclude_commands: Vec<String>,
+    /// Explicitly trusted rewrite-hook hashes.
+    /// Use this for intentional local customizations of the managed global hook.
+    #[serde(default)]
+    pub trusted_hook_hashes: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -135,6 +139,13 @@ pub fn telemetry_enabled() -> Option<bool> {
     Config::load().ok().map(|c| c.telemetry.enabled)
 }
 
+/// Return the configured trusted rewrite-hook hashes.
+pub fn trusted_hook_hashes() -> Vec<String> {
+    Config::load()
+        .map(|c| c.hooks.trusted_hook_hashes)
+        .unwrap_or_default()
+}
+
 impl Config {
     pub fn load() -> Result<Self> {
         let path = get_config_path()?;
@@ -199,15 +210,21 @@ mod tests {
         let toml = r#"
 [hooks]
 exclude_commands = ["curl", "gh"]
+trusted_hook_hashes = ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]
 "#;
         let config: Config = toml::from_str(toml).expect("valid toml");
         assert_eq!(config.hooks.exclude_commands, vec!["curl", "gh"]);
+        assert_eq!(
+            config.hooks.trusted_hook_hashes,
+            vec!["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]
+        );
     }
 
     #[test]
     fn test_hooks_config_default_empty() {
         let config = Config::default();
         assert!(config.hooks.exclude_commands.is_empty());
+        assert!(config.hooks.trusted_hook_hashes.is_empty());
     }
 
     #[test]
@@ -219,5 +236,6 @@ history_days = 90
 "#;
         let config: Config = toml::from_str(toml).expect("valid toml");
         assert!(config.hooks.exclude_commands.is_empty());
+        assert!(config.hooks.trusted_hook_hashes.is_empty());
     }
 }
